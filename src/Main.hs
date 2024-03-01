@@ -12,6 +12,7 @@ import Notebook
 import Note
 import Control.Exception
 
+import qualified Data.Map as DM
 import qualified Monomer.Lens as L
 import qualified Notebook as NB
 import qualified Note as N
@@ -25,9 +26,9 @@ import Data.List (isSuffixOf)
 
 data AppModel = AppModel {
   _currentNotebook :: Maybe Notebook,
-  _currentNote     :: Maybe Note,
-  _fileList        :: [FilePath],
-  _newNoteText     :: Text
+  _currentNote :: Maybe Note,
+  _fileList :: [FilePath],
+  _textFieldContents :: Text
 } deriving (Eq, Show)
 
 data AppEvent
@@ -36,7 +37,8 @@ data AppEvent
   | FileSelected FilePath
   | NotebookLoaded Notebook
   | CreateTestNotebook
-  | NewNoteEntered Text
+  | SaveNotebook
+  | AddNote Text
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -64,17 +66,18 @@ buildUI wenv model = widgetTree where
           spacer,
           button "Open Notebook" AppOpen,
           spacer,
-          button "Create Test Notebook" CreateTestNotebook
+          button "Create Test Notebook" CreateTestNotebook,
+          spacer,
+          button "Save Notebook" SaveNotebook
       ],
       spacer,
       scroll (vstack (map (fileButton . FileSelected) (model ^. fileList))),
       spacer,
       label "Notes:",
       scroll (maybe (label "") (buildNoteTree model 0) (model ^. currentNote)),
-      spacer,
       hstack [
-          textField (newNoteText . L.text) `styleBasic` [width 300],
-          button "Add Note" (NewNoteEntered (model ^. newNoteText))
+          textField_ textFieldContents [placeholder "Enter note content here"] `styleBasic` [width 300],
+          button "Add Note" (AddNote (model ^. textFieldContents))
       ]
     ] `styleBasic` [padding 10]
 
@@ -90,23 +93,43 @@ getNotebookName :: AppModel -> Text
 getNotebookName model = maybe "No Notebook" (T.pack . NB.getName) (model ^. currentNotebook)
 
 handleEvent :: WidgetEnv AppModel AppEvent -> WidgetNode AppModel AppEvent -> AppModel -> AppEvent -> [AppEventResponse AppModel AppEvent]
-handleEvent wenv node model evt = case evt of
-  AppInit -> []
-  AppOpen -> [Model (model & fileList .~ getFileList)]
-  FileSelected filePath -> [Task $ loadModelFromFile filePath]
-  NotebookLoaded notebook -> [Model $ model & currentNotebook .~ Just notebook
-                                            & currentNote .~ Just (NB.getRootNote notebook)]
-  CreateTestNotebook -> [Task $ do
-                          notebook <- NB.createAndSaveNotebook "testNotebook.txt"
-                          return $ NotebookLoaded notebook
-                        ]
-  NewNoteEntered text -> [Task $ do
-      -- Add the new note to the current note as a child
-      let updatedNote = N.addChild (T.unpack text) True (model ^. currentNote)
-      -- Update the current note in the model
-      let updatedModel = model & currentNote .~ Just updatedNote
-      -- Reload the tree
-      return $ Model updatedModel, Update]
+handleEvent _ _ model evt = case evt of
+  AppInit -> handleAppInit model
+  AppOpen -> handleAppOpen model
+  FileSelected filePath -> handleFileSelected model filePath
+  NotebookLoaded notebook -> handleNotebookLoaded model notebook
+  CreateTestNotebook -> handleCreateTestNotebook
+  AddNote noteContent -> handleAddNote model noteContent
+  SaveNotebook -> handleSaveNotebook model
+
+handleSaveNotebook :: AppModel -> [AppEventResponse AppModel AppEvent]
+handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
+  where
+    saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook "notebook.txt")]
+
+handleAddNote :: AppModel -> Text -> [AppEventResponse AppModel AppEvent]
+handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
+  where
+    addNote currNote = [Model $ model & currentNote .~ Just (N.addChild (T.unpack noteContent) False currNote)]
+
+handleAppInit :: AppModel -> [AppEventResponse AppModel AppEvent]
+handleAppInit _ = []
+
+handleAppOpen :: AppModel -> [AppEventResponse AppModel AppEvent]
+handleAppOpen model = [Model (model & fileList .~ getFileList)]
+
+handleFileSelected :: AppModel -> FilePath -> [AppEventResponse AppModel AppEvent]
+handleFileSelected _ filePath = [Task $ loadModelFromFile filePath]
+
+handleNotebookLoaded :: AppModel -> Notebook -> [AppEventResponse AppModel AppEvent]
+handleNotebookLoaded model notebook = [Model $ model & currentNotebook .~ Just notebook
+                                                  & currentNote .~ Just (NB.getRootNote notebook)]
+
+handleCreateTestNotebook :: [AppEventResponse AppModel AppEvent]
+handleCreateTestNotebook = [Task $ do
+                              notebook <- NB.createAndSaveNotebook "testNotebook.txt"
+                              return $ NotebookLoaded notebook
+                            ]
 
 loadModelFromFile :: FilePath -> IO AppEvent
 loadModelFromFile filePath = do

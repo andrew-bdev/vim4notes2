@@ -4,9 +4,9 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           monomer-starter
+name:           vim4notes
 version:        0.1.0.0
-homepage:       https://github.com/githubuser/monomer-starter#readme
+homepage:       https://github.com/andrew-bdev/vim4notes
 author:         Author name here
 maintainer:     example@example.com
 copyright:      2021 Author name here
@@ -23,7 +23,7 @@ executable app
       Notebook
       Spellcheck
       SpellChecker
-      Paths_monomer_starter
+      Paths_vim4notes
   hs-source-dirs:
       src
   default-extensions:

@@ -4,12 +4,13 @@ module Note
     , saveNote
     , newNote
     , addChild
-    , addNote
     , removeChild
     , printNote
     , getNoteContent
     , getNoteChildren
     , getNoteId
+    , updateContent
+    , createNote
     ) where
 
 import System.IO
@@ -25,59 +26,39 @@ data Note = Note {
     children :: [Note]
 } deriving (Show, Read, Eq)
 
--- just a test note to make sure 'save' is working
-testNote :: Note
-testNote = Note 1 "testing" True [Note 6 "inside" False []]
+isSection :: Note -> Bool
+isSection = section
+
+updateContent :: String -> Note -> Note
+updateContent newContent note = note { content = newContent }
 
 getNoteChildren :: Note -> [Note]
-getNoteChildren note = children note
+getNoteChildren = children
 
 getNoteId :: Note -> Integer
-getNoteId note = noteid note
+getNoteId = noteid
 
-getNoteChildrenLength :: Note -> Int
-getNoteChildrenLength note = length (children note)
+createNote :: String -> Bool -> [Note] -> Note
+createNote contentRequest typeRequest childrenRequest = Note {
+    noteid = 0,
+    content = contentRequest,
+    section = typeRequest,
+    children = childrenRequest
+}
 
--- load note from text file
 loadNote :: FilePath -> IO Note
-loadNote filename =
-   do
-      noteString <- readListFromFile filename
-      let newNote = read noteString :: Note
-      return newNote
+loadNote filename = read <$> filter (/= '\n') <$> readFile filename
 
--- save tree to text file
-saveNote note filename =
-   do
-      let noteString = show note
-      writeFile filename noteString
+saveNote :: Note -> FilePath -> IO ()
+saveNote note filename = writeFile filename (show note)
 
-readListFromFile :: FilePath -> IO String
-readListFromFile filename = do
-    fileExists <- doesFileExist filename
-    (if fileExists then (do
-        contents <- readFile filename
-        return (filter (/= '\n') contents)) else return "")
-
-go :: IO Note
-go = do
-    let filename = "note1.txt"
-    newNote <- loadNote filename
-    print newNote
-
-    saveNote testNote filename
-    return testNote
-
-newNote :: String -> Bool -> IO Note
-newNote contentRequest typeRequest = do
-    currentTime <- round <$> getPOSIXTime
-    let note = Note {
-        noteid = currentTime,
-        content = contentRequest,
-        section = typeRequest,
-        children = []
-    }
-    return note
+newNote :: String -> Bool -> Note
+newNote contentRequest typeRequest = Note {
+    noteid = 0,
+    content = contentRequest,
+    section = typeRequest,
+    children = []
+}
 
 addChild :: String -> Bool -> Note -> Note
 addChild contentRequest typeRequest parentNote =
@@ -89,18 +70,8 @@ addChild contentRequest typeRequest parentNote =
     }
     in parentNote { children = children parentNote ++ [child] }
 
-addNote :: String -> Note -> Note
-addNote contentRequest parentNote =
-    let child = Note {
-        noteid = noteid parentNote, 
-        content = contentRequest,
-        section = False,
-        children = []
-    }
-    in parentNote { children = children parentNote ++ [child] }
-
 getNoteContent :: Note -> String
-getNoteContent note = content note
+getNoteContent = content
 
 removeChild :: Integer -> Note -> Note
 removeChild removeRequestNoteId parentNote =

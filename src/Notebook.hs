@@ -5,10 +5,11 @@ module Notebook
   , loadNotebook
   , saveNotebook
   , createAndSaveNotebook
-  , getName
   , getNotes
   , newNotebook
   , getRootNote
+  , createNote
+  , getName
   ) where
 
 import Control.Exception
@@ -21,10 +22,11 @@ data Notebook = Notebook {
         _title :: String,
         _notes :: [Note]
 } deriving (Show, Read, Eq)
+
 makeLenses ''Notebook
 
 getRootNote :: Notebook -> Note
-getRootNote notebook = head $ getNotes notebook
+getRootNote = head . view notes
 
 getName :: Notebook -> String
 getName = view title
@@ -34,6 +36,9 @@ newNotebook = Notebook
 
 getNotes :: Notebook -> [Note]
 getNotes = view notes
+
+addNote :: Note -> Notebook -> Notebook
+addNote note notebook = notebook & notes %~ (note :)
 
 loadNotebook :: FilePath -> IO (Either String Notebook)
 loadNotebook filePath = do
