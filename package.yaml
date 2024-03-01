@@ -21,6 +21,10 @@ dependencies:
   - monomer
   - text
   - text-show
+  - directory
+  - time
+  - containers
+  - bytestring
 
 executables:
   app:
