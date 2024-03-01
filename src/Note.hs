@@ -11,13 +11,15 @@ module Note
     , getNoteId
     , updateContent
     , createNote
+    , findNote
     ) where
 
 import System.IO
 import System.IO.Error
 import System.Directory
 import System.Environment
-import Data.Time.Clock.POSIX 
+import Data.Time.Clock.POSIX
+import Control.Monad (mplus)
 
 data Note = Note {
     noteid :: Integer,
@@ -51,6 +53,14 @@ loadNote filename = read <$> filter (/= '\n') <$> readFile filename
 
 saveNote :: Note -> FilePath -> IO ()
 saveNote note filename = writeFile filename (show note)
+
+findNote :: Integer -> Note -> Maybe Note
+findNote noteId note =
+    if noteid note == noteId
+    then Just note
+    else case children note of
+        [] -> Nothing
+        _ -> foldl (\acc child -> acc `mplus` findNote noteId child) Nothing (children note)
 
 newNote :: String -> Bool -> Note
 newNote contentRequest typeRequest = Note {

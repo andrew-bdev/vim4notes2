@@ -39,6 +39,7 @@ data AppEvent
   | CreateTestNotebook
   | SaveNotebook
   | AddNote Text
+  | NoteClicked Integer
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -101,6 +102,12 @@ handleEvent _ _ model evt = case evt of
   CreateTestNotebook -> handleCreateTestNotebook
   AddNote noteContent -> handleAddNote model noteContent
   SaveNotebook -> handleSaveNotebook model
+  NoteClicked noteId -> handleNoteClicked model noteId
+
+handleNoteClicked :: AppModel -> Integer -> [AppEventResponse AppModel AppEvent]
+handleNoteClicked model noteId = maybe [] setAsCurrentNote (findNote noteId . NB.getRootNote =<< model ^. currentNotebook)
+  where
+    setAsCurrentNote note = [Model $ model & currentNote .~ Just note]
 
 handleSaveNotebook :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
