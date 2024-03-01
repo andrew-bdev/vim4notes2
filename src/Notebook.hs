@@ -1,60 +1,59 @@
-module Notebook where
+{-# LANGUAGE TemplateHaskell #-}
 
--- To run it, try:
--- ghci
--- :load Notebook
--- try 
+module Notebook
+  ( Notebook(..)
+  , loadNotebook
+  , saveNotebook
+  , createAndSaveNotebook
+  , getName
+  , getNotes
+  , newNotebook
+  , getRootNote
+  ) where
 
+import Control.Exception
+import Control.Lens
 import System.IO
 import System.IO.Error
-import System.Directory
-import System.Environment
-import Note hiding (readListFromFile)
+import Note
 
 data Notebook = Notebook {
-    title :: String,
-    notes :: [Note]
+        _title :: String,
+        _notes :: [Note]
 } deriving (Show, Read, Eq)
+makeLenses ''Notebook
 
-testNotebook :: Notebook
-testNotebook = Notebook "Test" []
+getRootNote :: Notebook -> Note
+getRootNote notebook = head $ getNotes notebook
 
-getHomeNote :: Notebook -> Maybe Note
-getHomeNote (Notebook _ []) = Nothing -- Return Nothing if notes array is empty
-getHomeNote (Notebook _ (x:_)) = Just x -- Return the first note if notes array is not empty
+getName :: Notebook -> String
+getName = view title
 
 newNotebook :: String -> [Note] -> Notebook
 newNotebook = Notebook
 
-addNote :: Note -> Notebook -> Notebook
-addNote noteRequest notebook = notebook { notes = notes notebook ++ [noteRequest] }
+getNotes :: Notebook -> [Note]
+getNotes = view notes
 
+loadNotebook :: FilePath -> IO (Either String Notebook)
+loadNotebook filePath = do
+    result <- try $ readFile filePath
+    return $ case result of
+        Left ex -> Left $ "Failed to read file: " ++ show (ex :: IOException)
+        Right content -> case reads content of
+            [(notebook, "")] -> Right notebook
+            _ -> Left $ "Failed to parse notebook from content: " ++ content
+            
+createAndSaveNotebook :: FilePath -> IO Notebook
+createAndSaveNotebook filename = do
+    let welcomeNote = Note 1 "Welcome to vim4notes" True 
+                        [ Note 2 "This is for notetaking" False []
+                        , Note 3 "You can have subnotes" False []
+                        , Note 4 "And more stuff" False []
+                        ]
+    let notebook = newNotebook "My New Notebook" [welcomeNote]
+    saveNotebook notebook filename
+    return notebook
 
--- load note from text file
-loadNotebook :: FilePath -> IO Notebook
-loadNotebook filename =
-   do
-      notebookString <- readListFromFile filename
-      let newNotebook = read notebookString :: Notebook
-      return newNotebook
-
--- save notebook to text file
-saveNotebook notebook filename =
-   do
-      let notebookString = show notebook
-      writeFile filename notebookString
-
-readListFromFile :: FilePath -> IO String
-readListFromFile filename = do
-    fileExists <- doesFileExist filename
-    (if fileExists then (do
-        contents <- readFile filename
-        return (filter (/= '\n') contents)) else return "")
-
-try :: IO ()
-try = do
-    let filename = "notebook1.txt"
-    newNotebook <- loadNotebook filename
-    print newNotebook
-
-
+saveNotebook :: Notebook -> FilePath -> IO ()
+saveNotebook notebook filename = writeFile filename (show notebook)

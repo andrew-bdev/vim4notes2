@@ -1,4 +1,16 @@
-module Note where 
+module Note 
+    ( Note(..)
+    , loadNote
+    , saveNote
+    , newNote
+    , addChild
+    , addNote
+    , removeChild
+    , printNote
+    , getNoteContent
+    , getNoteChildren
+    , getNoteId
+    ) where
 
 import System.IO
 import System.IO.Error
@@ -10,13 +22,21 @@ data Note = Note {
     noteid :: Integer,
     content :: String,
     section :: Bool,
-    children :: [Note],
-    parent :: Maybe Note 
+    children :: [Note]
 } deriving (Show, Read, Eq)
 
 -- just a test note to make sure 'save' is working
 testNote :: Note
-testNote = Note 1 "testing" True [Note 6 "inside" False [] Nothing ] Nothing
+testNote = Note 1 "testing" True [Note 6 "inside" False []]
+
+getNoteChildren :: Note -> [Note]
+getNoteChildren note = children note
+
+getNoteId :: Note -> Integer
+getNoteId note = noteid note
+
+getNoteChildrenLength :: Note -> Int
+getNoteChildrenLength note = length (children note)
 
 -- load note from text file
 loadNote :: FilePath -> IO Note
@@ -48,23 +68,16 @@ go = do
     saveNote testNote filename
     return testNote
 
-
-newNote :: String -> Bool -> Maybe Note -> IO Note
-newNote contentRequest typeRequest parentRequest = do
+newNote :: String -> Bool -> IO Note
+newNote contentRequest typeRequest = do
     currentTime <- round <$> getPOSIXTime
     let note = Note {
         noteid = currentTime,
         content = contentRequest,
         section = typeRequest,
-        children = [],
-        parent = parentRequest -- TODO: MIGHT NEED FIXING if this leads to recursion pains
+        children = []
     }
     return note
-
-getDirectory :: Note -> String
-getDirectory note = case parent note of
-    Just p -> getDirectory p ++ ">" ++ content note
-    Nothing -> content note
 
 addChild :: String -> Bool -> Note -> Note
 addChild contentRequest typeRequest parentNote =
@@ -72,22 +85,28 @@ addChild contentRequest typeRequest parentNote =
         noteid = noteid parentNote, 
         content = contentRequest,
         section = typeRequest,
-        children = [],
-        parent = Just parentNote
+        children = []
     }
     in parentNote { children = children parentNote ++ [child] }
 
-addNote :: Note -> Note -> Note
-addNote childNote parentNote =
-    let childWithParent = childNote { parent = Just parentNote }
-    in parentNote { children = children parentNote ++ [childWithParent] }
+addNote :: String -> Note -> Note
+addNote contentRequest parentNote =
+    let child = Note {
+        noteid = noteid parentNote, 
+        content = contentRequest,
+        section = False,
+        children = []
+    }
+    in parentNote { children = children parentNote ++ [child] }
+
+getNoteContent :: Note -> String
+getNoteContent note = content note
 
 removeChild :: Integer -> Note -> Note
 removeChild removeRequestNoteId parentNote =
     let updatedChildren = filter (\child -> noteid child /= removeRequestNoteId) (children parentNote)
     in parentNote { children = updatedChildren }
 
--- need to use putStrLn in debugging to make it nice
 printNote :: Int -> Maybe Note -> Note -> String
 printNote level current note =
     let formattedContent = if section note
@@ -98,7 +117,6 @@ printNote level current note =
                              else formattedContent
         result = highlightedContent ++ "\n" ++ concatMap (printNote (level + 1) current) (children note)
     in result
-    
 
 makeUnderline :: String -> String
 makeUnderline str = "\x1B[4m" ++ str ++ "\x1B[0m"
