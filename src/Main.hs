@@ -9,7 +9,7 @@ import Data.Text (Text)
 import Monomer
 import TextShow
 import Notebook
-import Note
+import Note 
 import Control.Exception
 import Debug.Trace
 
@@ -42,6 +42,8 @@ data AppEvent
   | SaveNotebook
   | AddNote Text
   | NoteSelected Integer
+  | Spellcheck
+  | NoteUpdated Note
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -77,7 +79,9 @@ buildUI wenv model = widgetTree where
           spacer,
           button "Create Test Notebook" CreateTestNotebook,
           spacer,
-          button "Save Notebook" SaveNotebook
+          button "Save Notebook" SaveNotebook,
+          spacer,
+          button "Spellcheck" Spellcheck
       ],
       spacer,
       if model ^. showFileButtons
@@ -115,6 +119,16 @@ handleEvent _ _ model evt = case evt of
   AddNote noteContent -> handleAddNote model noteContent
   SaveNotebook -> handleSaveNotebook model
   NoteSelected noteId -> handleNoteSelected model noteId
+  Spellcheck -> handleSpellcheck model
+  NoteUpdated note -> handleNoteUpdated model note
+
+handleNoteUpdated :: AppModel -> Note -> [AppEventResponse AppModel AppEvent]
+handleNoteUpdated model note = [Model $ model & currentNote .~ Just note]
+
+handleSpellcheck :: AppModel -> [AppEventResponse AppModel AppEvent]
+handleSpellcheck model = case model ^. currentNote of
+  Nothing -> []
+  Just note -> []
 
 handleNoteSelected :: AppModel -> Integer -> [AppEventResponse AppModel AppEvent]
 handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<< (NB.getRootNote =<< model ^. currentNotebook))
