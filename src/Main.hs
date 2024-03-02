@@ -57,10 +57,13 @@ buildNoteTree model level note = vstack [
     hstack [
         button "O" (NoteSelected $ N.getNoteId note), -- Add a button for selection
         spacer,
-        label (T.pack $ N.getNoteContent note) `styleBasic` [paddingL (fromIntegral level * 20.0)]
+        (if isCurrentNote then labelHighlighted else label) (T.pack $ N.getNoteContent note) `styleBasic` [paddingL (fromIntegral level * 20.0)]
     ],
     vstack $ map (buildNoteTree model (level + 1)) (N.getNoteChildren note)
     ]
+  where
+    isCurrentNote = Just note == (model ^. currentNote)
+    labelHighlighted text = label text `styleBasic` [bgColor (rgb 100 100 100)]
 
 buildUI :: WidgetEnv AppModel AppEvent -> AppModel -> WidgetNode AppModel AppEvent
 buildUI wenv model = widgetTree where

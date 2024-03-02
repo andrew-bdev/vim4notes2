@@ -49,6 +49,24 @@ findandcorrect text = do
     wrongwords <- findwrongwords text
     batchspellcheck wrongwords 5
 
+applyFirstCorrection :: String -> IO String
+applyFirstCorrection text = do
+    corrections <- findandcorrect text
+    return $ applyCorrection text corrections
+
+applyCorrection :: String -> [(String, [String])] -> String
+applyCorrection text [] = text
+applyCorrection text ((wrongWord, suggestedCorrections):_) =
+    case suggestedCorrections of
+        [] -> text
+        (firstCorrection:_) -> replaceFirstOccurrence wrongWord firstCorrection text
+
+replaceFirstOccurrence :: String -> String -> String -> String
+replaceFirstOccurrence search replace text =
+    case break (== search) (words text) of
+        (before, _:after) -> unwords (before ++ replace : after)
+        _ -> text
+
 loaddata :: FilePath -> IO (Map String Double)
 loaddata filepath = do
     dictString <- readFile filepath
