@@ -25,8 +25,10 @@ data Notebook = Notebook {
 
 makeLenses ''Notebook
 
-getRootNote :: Notebook -> Note
-getRootNote = head . view notes
+getRootNote :: Notebook -> Maybe Note
+getRootNote notebook = case getNotes notebook of
+    [] -> Nothing
+    (x:_) -> Just x
 
 getName :: Notebook -> String
 getName = view title

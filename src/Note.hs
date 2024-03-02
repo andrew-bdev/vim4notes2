@@ -12,6 +12,7 @@ module Note
     , updateContent
     , createNote
     , findNote
+    , getParentNote
     ) where
 
 import System.IO
@@ -20,6 +21,7 @@ import System.Directory
 import System.Environment
 import Data.Time.Clock.POSIX
 import Control.Monad (mplus)
+import Data.Maybe (listToMaybe, catMaybes)
 
 data Note = Note {
     noteid :: Integer,
@@ -53,6 +55,13 @@ loadNote filename = read <$> filter (/= '\n') <$> readFile filename
 
 saveNote :: Note -> FilePath -> IO ()
 saveNote note filename = writeFile filename (show note)
+
+getParentNote :: Note -> Maybe Note -> Maybe Note
+getParentNote targetNote currentNote = case currentNote of
+    Nothing -> Nothing
+    Just note -> if any (\child -> getNoteId child == getNoteId targetNote) (getNoteChildren note)
+        then Just note
+        else (Just note) `mplus` (listToMaybe $ catMaybes $ map (getParentNote targetNote . Just) (getNoteChildren note))
 
 findNote :: Integer -> Note -> Maybe Note
 findNote noteId note =

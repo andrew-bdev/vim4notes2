@@ -11,6 +11,7 @@ import TextShow
 import Notebook
 import Note
 import Control.Exception
+import Debug.Trace
 
 import qualified Data.Map as DM
 import qualified Monomer.Lens as L
@@ -28,7 +29,8 @@ data AppModel = AppModel {
   _currentNotebook :: Maybe Notebook,
   _currentNote :: Maybe Note,
   _fileList :: [FilePath],
-  _textFieldContents :: Text
+  _textFieldContents :: Text,
+  _showFileButtons ::  Bool
 } deriving (Eq, Show)
 
 data AppEvent
@@ -39,7 +41,7 @@ data AppEvent
   | CreateTestNotebook
   | SaveNotebook
   | AddNote Text
-  | NoteClicked Integer
+  | NoteSelected Integer
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -52,11 +54,14 @@ instance TextShow AppEvent where
 
 buildNoteTree :: AppModel -> Int -> Note -> WidgetNode AppModel AppEvent
 buildNoteTree model level note = vstack [
-    label (T.pack $ N.getNoteContent note) `styleBasic` (paddingL (fromIntegral level * 10.0) : if Just note == (model ^. currentNote) then [textColor (rgb 0 0 255)] else []),
+    hstack [
+        button "O" (NoteSelected $ N.getNoteId note), -- Add a button for selection
+        spacer,
+        label (T.pack $ N.getNoteContent note) `styleBasic` [paddingL (fromIntegral level * 20.0)]
+    ],
     vstack $ map (buildNoteTree model (level + 1)) (N.getNoteChildren note)
-  ]
+    ]
 
--- Modify the call to buildNoteTree in buildUI function
 buildUI :: WidgetEnv AppModel AppEvent -> AppModel -> WidgetNode AppModel AppEvent
 buildUI wenv model = widgetTree where
   widgetTree = vstack [
@@ -72,10 +77,14 @@ buildUI wenv model = widgetTree where
           button "Save Notebook" SaveNotebook
       ],
       spacer,
-      scroll (vstack (map (fileButton . FileSelected) (model ^. fileList))),
+      if model ^. showFileButtons
+        then scroll (vstack (map (fileButton . FileSelected) (model ^. fileList)))
+        else spacer,
       spacer,
       label "Notes:",
-      scroll (maybe (label "") (buildNoteTree model 0) (model ^. currentNote)),
+      scroll (maybe (label "") (\currentNote -> case getParentNote currentNote (NB.getRootNote =<< model ^. currentNotebook) of
+                                                  Just parentNote -> buildNoteTree model 0 parentNote
+                                                  Nothing -> label "No parent note found") (model ^. currentNote)),
       hstack [
           textField_ textFieldContents [placeholder "Enter note content here"] `styleBasic` [width 300],
           button "Add Note" (AddNote (model ^. textFieldContents))
@@ -102,12 +111,12 @@ handleEvent _ _ model evt = case evt of
   CreateTestNotebook -> handleCreateTestNotebook
   AddNote noteContent -> handleAddNote model noteContent
   SaveNotebook -> handleSaveNotebook model
-  NoteClicked noteId -> handleNoteClicked model noteId
+  NoteSelected noteId -> handleNoteSelected model noteId
 
-handleNoteClicked :: AppModel -> Integer -> [AppEventResponse AppModel AppEvent]
-handleNoteClicked model noteId = maybe [] setAsCurrentNote (findNote noteId . NB.getRootNote =<< model ^. currentNotebook)
+handleNoteSelected :: AppModel -> Integer -> [AppEventResponse AppModel AppEvent]
+handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<< (NB.getRootNote =<< model ^. currentNotebook))
   where
-    setAsCurrentNote note = [Model $ model & currentNote .~ Just note]
+    setAsCurrentNote note = [Model $ trace ("Note selected: " ++ show noteId) (model & currentNote .~ Just note)]
 
 handleSaveNotebook :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
@@ -130,7 +139,7 @@ handleFileSelected _ filePath = [Task $ loadModelFromFile filePath]
 
 handleNotebookLoaded :: AppModel -> Notebook -> [AppEventResponse AppModel AppEvent]
 handleNotebookLoaded model notebook = [Model $ model & currentNotebook .~ Just notebook
-                                                  & currentNote .~ Just (NB.getRootNote notebook)]
+                                                  & currentNote .~ (NB.getRootNote notebook)]
 
 handleCreateTestNotebook :: [AppEventResponse AppModel AppEvent]
 handleCreateTestNotebook = [Task $ do
@@ -159,7 +168,7 @@ getFileList = unsafePerformIO $ do
 
 main :: IO ()
 main = do
-    let model = AppModel Nothing Nothing [] ""
+    let model = AppModel Nothing Nothing [] "" False
     startApp model handleEvent buildUI config
     where
         config = [
