@@ -13,7 +13,11 @@ module Note
     , createNote
     , findNote
     , getParentNote
+    , spellcheckNote
+    , editNoteContent
     ) where
+
+import SpellChecker (applyFirstCorrection)
 
 import System.IO
 import System.IO.Error
@@ -29,6 +33,9 @@ data Note = Note {
     section :: Bool,
     children :: [Note]
 } deriving (Show, Read, Eq)
+
+editNoteContent :: String -> Note -> Note
+editNoteContent newContent note = note { content = newContent }
 
 isSection :: Note -> Bool
 isSection = section
@@ -49,6 +56,13 @@ createNote contentRequest typeRequest childrenRequest = Note {
     section = typeRequest,
     children = childrenRequest
 }
+
+spellcheckNote :: Note -> IO Note
+spellcheckNote note = do
+    let oldContent = getNoteContent note
+    newContent <- applyFirstCorrection oldContent
+    putStrLn $ "Corrected content: " ++ newContent
+    return $ updateContent newContent note
 
 loadNote :: FilePath -> IO Note
 loadNote filename = read <$> filter (/= '\n') <$> readFile filename

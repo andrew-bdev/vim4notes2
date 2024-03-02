@@ -9,7 +9,7 @@ import Data.Text (Text)
 import Monomer
 import TextShow
 import Notebook
-import Note 
+import Note
 import Control.Exception
 import Debug.Trace
 
@@ -43,7 +43,7 @@ data AppEvent
   | AddNote Text
   | NoteSelected Integer
   | Spellcheck
-  | NoteUpdated Note
+  | EditNote
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -94,7 +94,8 @@ buildUI wenv model = widgetTree where
                                                   Nothing -> label "No parent note found") (model ^. currentNote)),
       hstack [
           textField_ textFieldContents [placeholder "Enter note content here"] `styleBasic` [width 300],
-          button "Add Note" (AddNote (model ^. textFieldContents))
+          button "Add Note" (AddNote (model ^. textFieldContents)),
+          button "Edit Note" EditNote
       ]
     ] `styleBasic` [padding 10]
 
@@ -120,15 +121,53 @@ handleEvent _ _ model evt = case evt of
   SaveNotebook -> handleSaveNotebook model
   NoteSelected noteId -> handleNoteSelected model noteId
   Spellcheck -> handleSpellcheck model
-  NoteUpdated note -> handleNoteUpdated model note
+  EditNote -> handleEditNote model
+  where
+    handleAppInit model = []
+    handleAppOpen model = [Model (model & fileList .~ getFileList)]
+    handleFileSelected model filePath = [Task $ loadModelFromFile filePath, Model (model & showFileButtons .~ False)]
+    handleNotebookLoaded model notebook = [Model $ model & currentNotebook .~ Just notebook
+                                                  & currentNote .~ (NB.getRootNote notebook)]
+    handleCreateTestNotebook = [Task $ do
+                                  notebook <- NB.createAndSaveNotebook "testNotebook.txt"
+                                  return $ NotebookLoaded notebook
+                                ]
+    handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
+      where
+        addNote currNote = [Model $ model & currentNote .~ Just (N.addChild (T.unpack noteContent) False currNote)
+                                         & currentNote .~ (NB.getRootNote =<< model ^. currentNotebook)]
+    handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
+      where
+        saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook "notebook.txt")]
+    handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<< (NB.getRootNote =<< model ^. currentNotebook))
+      where
+        setAsCurrentNote note = [Model $ trace ("Note selected: " ++ show noteId) (model & currentNote .~ Just note)]
+    handleSpellcheck model = maybe [] spellcheckNote (model ^. currentNote)
+      where
+        spellcheckNote note = [Task $ fmap (const AppInit) (N.spellcheckNote note)]
+    handleEditNote model = maybe [] editNote (model ^. currentNote)
+      where
+        editNote currNote = [Model $ model & currentNote .~ Just (N.editNoteContent (T.unpack $ model ^. textFieldContents) currNote)
+                                         & currentNote .~ (NB.getRootNote =<< model ^. currentNotebook)]
 
-handleNoteUpdated :: AppModel -> Note -> [AppEventResponse AppModel AppEvent]
-handleNoteUpdated model note = [Model $ model & currentNote .~ Just note]
+handleAddNote :: AppModel -> Text -> [AppEventResponse AppModel AppEvent]
+handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
+  where
+    addNote currNote = let updatedNote = N.addChild (T.unpack noteContent) False currNote
+                       in [Model $ model & currentNote .~ Just updatedNote
+                                         & currentNotebook %~ fmap (NB.updateNote updatedNote)]
+
+handleEditNote :: AppModel -> [AppEventResponse AppModel AppEvent]
+handleEditNote model = maybe [] editNote (model ^. currentNote)
+  where
+    editNote currNote = let updatedNote = N.editNoteContent (T.unpack $ model ^. textFieldContents) currNote
+                        in [Model $ model & currentNote .~ Just updatedNote
+                                           & currentNotebook %~ fmap (NB.updateNote updatedNote)]
 
 handleSpellcheck :: AppModel -> [AppEventResponse AppModel AppEvent]
-handleSpellcheck model = case model ^. currentNote of
-  Nothing -> []
-  Just note -> []
+handleSpellcheck model = maybe [] spellcheckNote (model ^. currentNote)
+  where
+    spellcheckNote note = [Task $ fmap (const AppInit) (N.spellcheckNote note)]
 
 handleNoteSelected :: AppModel -> Integer -> [AppEventResponse AppModel AppEvent]
 handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<< (NB.getRootNote =<< model ^. currentNotebook))
@@ -140,11 +179,6 @@ handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
   where
     saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook "notebook.txt")]
 
-handleAddNote :: AppModel -> Text -> [AppEventResponse AppModel AppEvent]
-handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
-  where
-    addNote currNote = [Model $ model & currentNote .~ Just (N.addChild (T.unpack noteContent) False currNote)]
-
 handleAppInit :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleAppInit _ = []
 
@@ -152,7 +186,7 @@ handleAppOpen :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleAppOpen model = [Model (model & fileList .~ getFileList)]
 
 handleFileSelected :: AppModel -> FilePath -> [AppEventResponse AppModel AppEvent]
-handleFileSelected _ filePath = [Task $ loadModelFromFile filePath]
+handleFileSelected model filePath = [Task $ loadModelFromFile filePath, Model (model & showFileButtons .~ False)]
 
 handleNotebookLoaded :: AppModel -> Notebook -> [AppEventResponse AppModel AppEvent]
 handleNotebookLoaded model notebook = [Model $ model & currentNotebook .~ Just notebook
@@ -185,7 +219,7 @@ getFileList = unsafePerformIO $ do
 
 main :: IO ()
 main = do
-    let model = AppModel Nothing Nothing [] "" False
+    let model = AppModel Nothing Nothing [] "" True
     startApp model handleEvent buildUI config
     where
         config = [
