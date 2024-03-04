@@ -134,13 +134,9 @@ handleEvent _ _ model evt = case evt of
                                   notebook <- NB.createAndSaveNotebook "testNotebook.txt"
                                   return $ NotebookLoaded notebook
                                 ]
-    handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
-      where
-        addNote currNote = [Model $ model & currentNote .~ Just (N.addChild (T.unpack noteContent) False currNote)
-                                         & currentNote .~ (NB.getRootNote =<< model ^. currentNotebook)]
     handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
       where
-        saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook "notebook.txt")]
+        saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook (getTitle notebook))]
     handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<< (NB.getRootNote =<< model ^. currentNotebook))
       where
         setAsCurrentNote note = [Model $ trace ("Note selected: " ++ show noteId) (model & currentNote .~ Just note)]
@@ -179,7 +175,6 @@ handleAddNote model noteContent = case model ^. currentNotebook of
                           & currentNotebook .~ Just updatedNotebook]
 
 
-
 handleSpellcheck :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleSpellcheck model = maybe [] spellcheckNote (model ^. currentNote)
   where
@@ -193,7 +188,9 @@ handleNoteSelected model noteId = maybe [] setAsCurrentNote (findNote noteId =<<
 handleSaveNotebook :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleSaveNotebook model = maybe [] saveNotebook (model ^. currentNotebook)
   where
-    saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook "notebook.txt")]
+    saveNotebook notebook = [Task $ fmap (const AppInit) (NB.saveNotebook notebook (getTitle notebook))]
+
+getTitle notebook = (concat (words (_title notebook))) ++ ".txt"
 
 handleAppInit :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleAppInit _ = []
