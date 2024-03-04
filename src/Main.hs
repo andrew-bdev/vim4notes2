@@ -43,7 +43,8 @@ data AppEvent
   | AddNote Text
   | NoteSelected Integer
   | Spellcheck
-  | EditNote
+  | EditNote Text
+  | UpdateUI 
   deriving (Eq, Show)
 
 makeLenses 'AppModel
@@ -95,10 +96,10 @@ buildUI wenv model = widgetTree where
       hstack [
           textField_ textFieldContents [placeholder "Enter note content here"] `styleBasic` [width 300],
           button "Add Note" (AddNote (model ^. textFieldContents)),
-          button "Edit Note" EditNote
+          button "Edit Note" (EditNote (model ^. textFieldContents))
       ]
     ] `styleBasic` [padding 10]
-
+  
 fileButton :: AppEvent -> WidgetNode AppModel AppEvent
 fileButton evt = case evt of
   FileSelected filePath -> button (T.pack filePath) evt
@@ -121,7 +122,8 @@ handleEvent _ _ model evt = case evt of
   SaveNotebook -> handleSaveNotebook model
   NoteSelected noteId -> handleNoteSelected model noteId
   Spellcheck -> handleSpellcheck model
-  EditNote -> handleEditNote model
+  EditNote noteContent -> handleEditNote model noteContent
+  UpdateUI -> [Model model]
   where
     handleAppInit model = []
     handleAppOpen model = [Model (model & fileList .~ getFileList)]
@@ -145,24 +147,38 @@ handleEvent _ _ model evt = case evt of
     handleSpellcheck model = maybe [] spellcheckNote (model ^. currentNote)
       where
         spellcheckNote note = [Task $ fmap (const AppInit) (N.spellcheckNote note)]
-    handleEditNote model = maybe [] editNote (model ^. currentNote)
-      where
-        editNote currNote = [Model $ model & currentNote .~ Just (N.editNoteContent (T.unpack $ model ^. textFieldContents) currNote)
-                                         & currentNote .~ (NB.getRootNote =<< model ^. currentNotebook)]
+
+
+handleEditNote :: AppModel -> Text -> [AppEventResponse AppModel AppEvent]
+handleEditNote model newContent = case model ^. currentNotebook of
+  Nothing -> []
+  Just notebook ->
+    let updatedNote = N.editNoteContent (T.unpack newContent) <$> model ^. currentNote
+        updatedNotebook = case updatedNote of
+                            Just note -> NB.updateNote note notebook
+                            Nothing -> notebook
+    in case updatedNote of
+         Nothing -> []
+         Just newNote ->
+           [Model $ model & currentNote .~ Just newNote
+                          & currentNotebook .~ Just updatedNotebook]
+
 
 handleAddNote :: AppModel -> Text -> [AppEventResponse AppModel AppEvent]
-handleAddNote model noteContent = maybe [] addNote (model ^. currentNote)
-  where
-    addNote currNote = let updatedNote = N.addChild (T.unpack noteContent) False currNote
-                       in [Model $ model & currentNote .~ Just updatedNote
-                                         & currentNotebook %~ fmap (NB.updateNote updatedNote)]
+handleAddNote model noteContent = case model ^. currentNotebook of
+  Nothing -> []
+  Just notebook ->
+    let updatedNote = N.addChild (T.unpack noteContent) False <$> model ^. currentNote
+        updatedNotebook = case updatedNote of
+                            Just note -> NB.updateNote note notebook
+                            Nothing -> notebook
+    in case updatedNote of
+         Nothing -> []
+         Just newNote ->
+           [Model $ model & currentNote .~ Just newNote
+                          & currentNotebook .~ Just updatedNotebook]
 
-handleEditNote :: AppModel -> [AppEventResponse AppModel AppEvent]
-handleEditNote model = maybe [] editNote (model ^. currentNote)
-  where
-    editNote currNote = let updatedNote = N.editNoteContent (T.unpack $ model ^. textFieldContents) currNote
-                        in [Model $ model & currentNote .~ Just updatedNote
-                                           & currentNotebook %~ fmap (NB.updateNote updatedNote)]
+
 
 handleSpellcheck :: AppModel -> [AppEventResponse AppModel AppEvent]
 handleSpellcheck model = maybe [] spellcheckNote (model ^. currentNote)

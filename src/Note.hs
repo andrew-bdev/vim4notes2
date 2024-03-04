@@ -37,11 +37,21 @@ data Note = Note {
 editNoteContent :: String -> Note -> Note
 editNoteContent newContent note = note { content = newContent }
 
+debug :: Note -> IO ()
+debug n = do 
+    let toPrint = printNote 0 Nothing n
+    putStrLn toPrint
+    return ()
+
 isSection :: Note -> Bool
 isSection = section
 
 updateContent :: String -> Note -> Note
-updateContent newContent note = note { content = newContent }
+updateContent newContent note = 
+    let 
+        pro = debug note
+        newNote = note { content = newContent }
+    in newNote
 
 getNoteChildren :: Note -> [Note]
 getNoteChildren = children
